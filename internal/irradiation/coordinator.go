@@ -12,7 +12,8 @@ func NewLeaseBook() *LeaseBook {
 }
 
 func (b *LeaseBook) Claim(owner string) bool {
-	
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.owner != "" {
 		return false
 	}
