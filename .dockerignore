@@ -1,0 +1,8 @@
+.git
+.verification-cache
+cases
+workspaces
+evidence
+runner
+staging
+node_modules
