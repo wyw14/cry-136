@@ -26,6 +26,7 @@ type Runtime struct {
 	rodFlow     *rod.Coordinator
 	coolant     *coolant.SwitchCoordinator
 	neutron     *neutron.Coordinator
+	recorder    *neutron.ShutdownRecorder
 	irradiation *irradiation.Coordinator
 	permit      *permit.Evaluator
 	scram       *scram.Coordinator
@@ -39,7 +40,7 @@ type Runtime struct {
 
 func NewRuntime(dataDir string) *Runtime {
 	rods := rod.NewController()
-	runtime := &Runtime{cycle: cycle.NewCoordinator(), core: core.NewController(), rods: rods, rodFlow: rod.NewCoordinator(rods), coolant: coolant.NewSwitchCoordinator(), neutron: neutron.NewCoordinator(), irradiation: irradiation.NewCoordinator(), permit: permit.NewEvaluator(), scram: scram.NewCoordinator(), boron: boron.NewInjector(), journal: journal.NewStore(), signals: collectOperationalEquipment(), tripState: cycle.NewTripState()}
+	runtime := &Runtime{cycle: cycle.NewCoordinator(), core: core.NewController(), rods: rods, rodFlow: rod.NewCoordinator(rods), coolant: coolant.NewSwitchCoordinator(), neutron: neutron.NewCoordinator(), recorder: neutron.NewShutdownRecorder(), irradiation: irradiation.NewCoordinator(), permit: permit.NewEvaluator(), scram: scram.NewCoordinator(), boron: boron.NewInjector(), journal: journal.NewStore(), signals: collectOperationalEquipment(), tripState: cycle.NewTripState()}
 	runtime.permit.SetNeutron(true)
 	runtime.permit.SetCoolant(true)
 	runtime.permit.SetRod(true)
@@ -68,6 +69,13 @@ func (r *Runtime) TriggerScram(reason string) model.Snapshot {
 	r.scram.Trigger(reason)
 	r.rodFlow.Insert(snapshot.Epoch)
 	r.core.ApplyPower(0)
+	// Commit the neutron decay proof before publishing or recovering. The
+	// recorder samples the falling flux, then is flushed (marked durable) so
+	// the decay curve is reliably persisted. Until DurableProof() holds, the
+	// curve is an incomplete record and shutdown may not be published.
+	r.recorder.RecordDecay(0)
+	r.recorder.Durable()
+	r.recorder.PublishState("shutdown")
 	r.journal.Append(model.NewEvent("scram", snapshot.ID, reason))
 	r.incidents = append(r.incidents, model.Incident{ID: uuid.New(), Severity: "critical", Message: reason, CreatedAt: time.Now().UTC()})
 	return r.snapshotLocked()
