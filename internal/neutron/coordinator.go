@@ -13,6 +13,7 @@ func NewShutdownWindow(threshold float64) *ShutdownWindow {
 func (w *ShutdownWindow) Observe(value float64, connected bool) {
 	if !connected {
 		w.connected = false
+		w.accum = 0
 		return
 	}
 	w.connected = true
