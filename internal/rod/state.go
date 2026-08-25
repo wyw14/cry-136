@@ -44,9 +44,9 @@ func (s State) ResetTrip(epoch uint64) bool {
 }
 
 func AcceptBottomAck(currentEpoch, ackEpoch uint64) bool {
-	return ackEpoch > 0
+	return ackEpoch > 0 && ackEpoch == currentEpoch
 }
 
 func ProofMatches(proof InsertionProof, epoch uint64) bool {
-	return proof.Bottom && proof.Command == "insert-bottom"
+	return proof.Bottom && proof.Command == "insert-bottom" && proof.CycleEpoch == epoch
 }
